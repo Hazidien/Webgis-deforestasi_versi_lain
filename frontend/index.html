@@ -6,66 +6,118 @@
   <title>GeoAI Deforestation</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.css">
-  <link rel="stylesheet" href="css/style.css?v=4">
+  <link rel="stylesheet" href="css/style.css?v=5">
 </head>
 <body>
   <aside id="sidebar">
     <div class="brand">
-      <div><h1>GeoAI Analysis</h1><p>Deforestation · Landsat</p></div>
+      <div><h1>GeoAI Analysis</h1><p id="moduleSubtitle">Deforestation · Landsat</p></div>
       <div class="brand-actions">
         <button id="infoBtn" class="icon-btn info-btn" title="Project information" aria-label="Project information">i</button>
         <button id="collapse" class="icon-btn" title="Collapse sidebar" aria-label="Collapse sidebar">‹</button>
       </div>
     </div>
+
     <section class="panel-block">
-      <div class="section-title"><span>Module</span><button id="moduleInfoBtn" class="mini-info" title="About this module" aria-label="About this module">i</button></div>
-      <select id="moduleSelect" disabled><option>Deforestation</option></select>
-      <label>Benchmark period<select disabled><option>1990 → 2020</option></select></label>
+      <div class="section-title"><span>Module</span><button id="moduleInfoBtn" class="mini-info" title="About selected module" aria-label="About selected module">i</button></div>
+      <select id="moduleSelect" aria-label="Analysis module">
+        <option value="deforestation">Deforestation</option>
+        <option value="ndfi_change">NDFI Change Detection</option>
+      </select>
+      <div id="deforestationControls">
+        <label>Benchmark period<select disabled><option>1990 → 2020</option></select></label>
+      </div>
+      <div id="ndfiControls" hidden>
+        <div class="date-grid">
+          <label>Time 0 start<input id="time0Start" type="date" value="2019-05-01"></label>
+          <label>Time 0 end<input id="time0End" type="date" value="2021-01-01"></label>
+          <label>Time 1 start<input id="time1Start" type="date" value="2023-06-16"></label>
+          <label>Time 1 end<input id="time1End" type="date" value="2024-06-16"></label>
+        </div>
+        <p class="tiny">NDFI uses two separate Landsat 8 periods. Time 0 and Time 1 cannot be identical.</p>
+      </div>
     </section>
+
     <section class="panel-block">
       <div class="section-title">AOI <span id="aoiBadge" class="badge">Not set</span></div>
-      <p class="hint">Draw a polygon/rectangle or upload a Shapefile ZIP. AOI is processed in Google Earth Engine.</p>
+      <p class="hint">Draw a polygon/rectangle or upload a Shapefile ZIP. Only the selected module will be executed.</p>
       <div class="file-wrap"><input id="shp" type="file" accept=".zip"><label for="shp" class="file-label">Choose Shapefile ZIP</label><span id="fileName">No file chosen</span></div>
       <p class="tiny">Required in ZIP: .shp + .shx + .dbf + .prj · Max 20 MB</p><div id="aoiMeta" class="aoi-meta" hidden></div>
     </section>
-    <button id="run" class="primary">RUN ANALYSIS</button><button id="clear" class="secondary">CLEAR AOI</button>
+
+    <button id="run" class="primary">RUN SELECTED ANALYSIS</button>
+    <button id="clear" class="secondary">CLEAR AOI</button>
     <div id="status" class="status">Draw a polygon or rectangle on the map.</div>
+
     <section id="results" class="results" hidden>
       <div class="section-title">Result <span class="badge success">Ready</span></div>
-      <div class="metric-grid"><div class="metric-card"><span>2020 forest</span><strong id="currentArea">—</strong><small>ha</small></div><div class="metric-card"><span>1990 → 2020</span><strong id="changeArea">—</strong><small>ha change</small></div><div class="metric-card"><span>Forest cover</span><strong id="coverPct">—</strong><small>of AOI</small></div></div>
+      <div id="deforestationResults" class="metric-grid">
+        <div class="metric-card"><span>2020 forest</span><strong id="currentArea">—</strong><small>ha</small></div>
+        <div class="metric-card"><span>1990 → 2020</span><strong id="changeArea">—</strong><small>ha change</small></div>
+        <div class="metric-card"><span>Forest cover</span><strong id="coverPct">—</strong><small>of AOI</small></div>
+      </div>
+      <div id="ndfiResults" class="ndfi-results" hidden>
+        <div class="metric-grid">
+          <div class="metric-card"><span>Forest · Time 0</span><strong id="forestT0">—</strong><small>ha</small></div>
+          <div class="metric-card"><span>Deforestation</span><strong id="deforestationArea">—</strong><small>ha</small></div>
+          <div class="metric-card"><span>Logging</span><strong id="loggingArea">—</strong><small>ha</small></div>
+          <div class="metric-card"><span>Regrowth</span><strong id="regrowthArea">—</strong><small>ha</small></div>
+        </div>
+      </div>
       <div class="download-grid"><a id="pdfBtn" class="download-btn disabled" href="#" target="_blank">PDF REPORT</a><a id="geoBtn" class="download-btn disabled" href="#" target="_blank">DOWNLOAD GEOTIFF</a></div>
     </section>
-    <section class="method"><div class="section-title">Method & limits</div><div class="method-row"><span>Sensor</span><b>Landsat 4/5 + 8/9 C2 L2</b></div><div class="method-row"><span>Composite</span><b>Median · ±1 year</b></div><div class="method-row"><span>VI</span><b>(NIR − SWIR) / (NIR + SWIR)</b></div><div class="method-row"><span>Forest rule</span><b>VI &gt; 0.70</b></div><p class="tiny">Screening indicator, not a certified land-cover classification. Review cloud, shadow, drought, harvest and edge effects before formal reporting.</p></section>
+
+    <section class="method">
+      <div class="section-title">Selected method <span id="methodModule" class="badge">Deforestation</span></div>
+      <div id="deforestationMethod">
+        <div class="method-row"><span>Sensor</span><b>Landsat 4/5 + 8/9 C2 L2</b></div>
+        <div class="method-row"><span>Composite</span><b>Median · ±1 year</b></div>
+        <div class="method-row"><span>VI</span><b>(NIR − SWIR) / (NIR + SWIR)</b></div>
+        <div class="method-row"><span>Forest rule</span><b>VI &gt; 0.70</b></div>
+        <p class="tiny">Forest extent screening across the benchmark years 1990, 1995, 2000, 2005, 2010, 2015 and 2020.</p>
+      </div>
+      <div id="ndfiMethod" hidden>
+        <div class="method-row"><span>Sensor</span><b>Landsat 8 C2 L2</b></div>
+        <div class="method-row"><span>Model</span><b>SMA → NDFI</b></div>
+        <div class="method-row"><span>Forest mask</span><b>NDFI t0 &gt; 0.60</b></div>
+        <div class="method-row"><span>Change classes</span><b>4 classes</b></div>
+        <p class="tiny">NDFI Change = NDFI Time 1 − NDFI Time 0. Classes follow the supplied Course 2 thresholds.</p>
+      </div>
+      <p class="tiny">Screening indicator, not a certified land-cover classification. Review cloud, shadow, drought, harvest and edge effects before formal reporting.</p>
+    </section>
     <footer>Open satellite data · Google Earth Engine · Leaflet/OpenStreetMap</footer>
   </aside>
+
   <button id="reopenSidebar" class="reopen-btn" title="Open sidebar" aria-label="Open sidebar">›</button>
-  <main id="map"></main><div id="mapHint" class="map-hint">Draw a polygon or rectangle on the map.</div><div id="loader" class="loader" hidden>Processing Earth Engine…</div>
+  <main id="map"></main>
+  <div id="mapHint" class="map-hint">Draw a polygon or rectangle on the map.</div>
+  <div id="loader" class="loader" hidden>Processing selected analysis in Earth Engine…</div>
 
   <div id="infoModal" class="modal" hidden>
     <div class="modal-backdrop" id="infoBackdrop"></div>
     <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
       <div class="modal-head"><div><p class="modal-eyebrow">WEBGIS PROJECT</p><h2 id="infoTitle">WebGIS Deforestation</h2><p class="modal-author">by Hazidien Ramadhan Utomo</p></div><button id="closeInfoBtn" class="icon-btn modal-close" title="Close information" aria-label="Close information">×</button></div>
       <div class="modal-body">
-        <div class="info-callout"><b>Purpose</b><span>Interactive GIS for screening forest extent and long-term forest-area change using Landsat imagery processed with Google Earth Engine.</span></div>
-        <h3>How to use this WebGIS</h3>
+        <div class="info-callout"><b>Purpose</b><span>Interactive GIS for forest screening and forest-change analysis using Landsat imagery processed with Google Earth Engine.</span></div>
+        <h3>One run = one analysis</h3>
+        <p>Choose <b>one module only</b> from the Module selector. <b>RUN SELECTED ANALYSIS</b> executes only that selected engine. Deforestation and NDFI Change Detection are never executed together in the same request.</p>
+        <h3>Available modules</h3>
         <div class="info-list">
-          <div><b>1. Module</b><p>The current module is <b>Deforestation</b>. It applies the forest-extent workflow based on the supplied Landsat/VI method.</p></div>
-          <div><b>2. Benchmark period</b><p><b>1990 → 2020</b> is fixed for this module. The workflow evaluates 1990, 1995, 2000, 2005, 2010, 2015 and 2020.</p></div>
-          <div><b>3. AOI</b><p>Draw a polygon/rectangle directly on the map, or upload a Shapefile ZIP containing <b>.shp + .shx + .dbf + .prj</b>. Maximum upload size is 20 MB.</p></div>
-          <div><b>4. RUN ANALYSIS</b><p>Submits the AOI to the FastAPI backend, initializes Earth Engine and runs the remote-sensing workflow.</p></div>
-          <div><b>5. CLEAR AOI</b><p>Removes the AOI, result layers, map legend and previous result cards so another area can be analysed.</p></div>
-          <div><b>6. Result</b><p>After a successful run, the interface reports 2020 forest area, 1990–2020 area change and forest cover percentage.</p></div>
-          <div><b>7. Map layers</b><p>Use the Layers control to switch result overlays and compare benchmark outputs on the map.</p></div>
-          <div><b>8. Downloads</b><p><b>PDF REPORT</b> provides a summary report. <b>DOWNLOAD GEOTIFF</b> provides the generated raster download when available.</p></div>
+          <div><b>Deforestation</b><p>Forest extent and long-term forest-area screening using the supplied VI workflow: Landsat 4/5 + 8/9, median ±1 year, VI = (NIR − SWIR)/(NIR + SWIR), forest rule VI &gt; 0.70.</p></div>
+          <div><b>NDFI Change Detection</b><p>Two-date SMA/NDFI workflow based on the supplied Course 1 and Course 2 material. It calculates NDFI for Time 0 and Time 1, subtracts them, then classifies no change, logging, deforestation and vegetation regrowth.</p></div>
         </div>
-        <h3>Current analysis method</h3>
-        <div class="formula-box"><span>Landsat 4/5 or 8/9</span><span>→</span><span>Cloud mask</span><span>→</span><span>Median ±1 year</span><span>→</span><span>VI</span><span>→</span><span>VI &gt; 0.70</span><span>→</span><span>Forest area</span></div>
-        <p class="modal-note">VI = (NIR − SWIR) / (NIR + SWIR). The output is a screening indicator, not a certified land-cover classification.</p>
-        <h3>Map controls</h3><p>Use the drawing tools to create the AOI. Use <b>Layers</b> to switch overlays and the zoom controls to change scale. The sidebar can be collapsed and reopened at any time.</p>
-        <div class="modal-footer-note">GeoAI Analysis · Deforestation · Landsat · Google Earth Engine</div>
+        <h3>AOI &amp; results</h3>
+        <p>Draw a polygon/rectangle or upload a Shapefile ZIP containing <b>.shp + .shx + .dbf + .prj</b>. The selected analysis then runs for that AOI. Results, map layers, PDF report and GeoTIFF belong only to that run.</p>
+        <h3>Why separate the modules?</h3>
+        <p>The two methods answer different analytical questions and have different inputs and outputs. Separating them prevents unnecessary Earth Engine computation and makes every result traceable to exactly one method.</p>
+        <div class="modal-footer-note">GeoAI Analysis · WebGIS Deforestation · Landsat · Google Earth Engine</div>
       </div>
     </section>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.min.js"></script><script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script><script src="js/app.js?v=4"></script>
-</body></html>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.min.js"></script>
+  <script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script>
+  <script src="js/app.js?v=5"></script>
+</body>
+</html>
