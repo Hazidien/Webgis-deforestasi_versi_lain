@@ -6,7 +6,7 @@
   <title>GeoAI Deforestation</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.css">
-  <link rel="stylesheet" href="css/style.css?v=5">
+  <link rel="stylesheet" href="css/style.css?v=6">
 </head>
 <body>
   <aside id="sidebar">
@@ -24,17 +24,17 @@
         <option value="deforestation">Deforestation</option>
         <option value="ndfi_change">NDFI Change Detection</option>
       </select>
+
       <div id="deforestationControls">
         <label>Benchmark period<select disabled><option>1990 → 2020</option></select></label>
       </div>
+
       <div id="ndfiControls" hidden>
         <div class="date-grid">
-          <label>Time 0 start<input id="time0Start" type="date" value="2019-05-01"></label>
-          <label>Time 0 end<input id="time0End" type="date" value="2021-01-01"></label>
-          <label>Time 1 start<input id="time1Start" type="date" value="2023-06-16"></label>
-          <label>Time 1 end<input id="time1End" type="date" value="2024-06-16"></label>
+          <label>Time 0 · Before<input id="time0Date" type="date" value="2020-01-01"></label>
+          <label>Time 1 · After<input id="time1Date" type="date" value="2024-01-01"></label>
         </div>
-        <p class="tiny">NDFI uses two separate Landsat 8 periods. Time 0 and Time 1 cannot be identical.</p>
+        <p class="tiny">Select two observation dates. Each date is expanded automatically into a one-year Landsat 8 median window for the NDFI calculation.</p>
       </div>
     </section>
 
@@ -45,7 +45,7 @@
       <p class="tiny">Required in ZIP: .shp + .shx + .dbf + .prj · Max 20 MB</p><div id="aoiMeta" class="aoi-meta" hidden></div>
     </section>
 
-    <button id="run" class="primary">RUN SELECTED ANALYSIS</button>
+    <button id="run" class="primary">RUN DEFORESTATION ANALYSIS</button>
     <button id="clear" class="secondary">CLEAR AOI</button>
     <div id="status" class="status">Draw a polygon or rectangle on the map.</div>
 
@@ -74,14 +74,14 @@
         <div class="method-row"><span>Composite</span><b>Median · ±1 year</b></div>
         <div class="method-row"><span>VI</span><b>(NIR − SWIR) / (NIR + SWIR)</b></div>
         <div class="method-row"><span>Forest rule</span><b>VI &gt; 0.70</b></div>
-        <p class="tiny">Forest extent screening across the benchmark years 1990, 1995, 2000, 2005, 2010, 2015 and 2020.</p>
+        <p class="tiny">Forest extent screening across benchmark years 1990, 1995, 2000, 2005, 2010, 2015 and 2020.</p>
       </div>
       <div id="ndfiMethod" hidden>
         <div class="method-row"><span>Sensor</span><b>Landsat 8 C2 L2</b></div>
         <div class="method-row"><span>Model</span><b>SMA → NDFI</b></div>
+        <div class="method-row"><span>Observation</span><b>Time 0 → Time 1</b></div>
         <div class="method-row"><span>Forest mask</span><b>NDFI t0 &gt; 0.60</b></div>
-        <div class="method-row"><span>Change classes</span><b>4 classes</b></div>
-        <p class="tiny">NDFI Change = NDFI Time 1 − NDFI Time 0. Classes follow the supplied Course 2 thresholds.</p>
+        <p class="tiny">Each selected date becomes a one-year median window. NDFI Change = NDFI Time 1 − NDFI Time 0.</p>
       </div>
       <p class="tiny">Screening indicator, not a certified land-cover classification. Review cloud, shadow, drought, harvest and edge effects before formal reporting.</p>
     </section>
@@ -100,16 +100,18 @@
       <div class="modal-body">
         <div class="info-callout"><b>Purpose</b><span>Interactive GIS for forest screening and forest-change analysis using Landsat imagery processed with Google Earth Engine.</span></div>
         <h3>One run = one analysis</h3>
-        <p>Choose <b>one module only</b> from the Module selector. <b>RUN SELECTED ANALYSIS</b> executes only that selected engine. Deforestation and NDFI Change Detection are never executed together in the same request.</p>
+        <p>Choose <b>one module only</b>. RUN executes only the selected engine; Deforestation and NDFI Change Detection are never executed together in the same request.</p>
         <h3>Available modules</h3>
         <div class="info-list">
-          <div><b>Deforestation</b><p>Forest extent and long-term forest-area screening using the supplied VI workflow: Landsat 4/5 + 8/9, median ±1 year, VI = (NIR − SWIR)/(NIR + SWIR), forest rule VI &gt; 0.70.</p></div>
-          <div><b>NDFI Change Detection</b><p>Two-date SMA/NDFI workflow based on the supplied Course 1 and Course 2 material. It calculates NDFI for Time 0 and Time 1, subtracts them, then classifies no change, logging, deforestation and vegetation regrowth.</p></div>
+          <div><b>Deforestation</b><p>Long-term forest extent screening using the supplied workflow: Landsat 4/5 + 8/9, median ±1 year, VI = (NIR − SWIR)/(NIR + SWIR), forest rule VI &gt; 0.70, with fixed benchmark years 1990–2020.</p></div>
+          <div><b>NDFI Change Detection</b><p>Two-date SMA/NDFI workflow based on the supplied Course 1 and Course 2 material. Time 0 and Time 1 are two user-selected observation dates; each is expanded to a one-year median Landsat 8 window, then NDFI Change is calculated and classified.</p></div>
         </div>
+        <h3>NDFI dates</h3>
+        <p>The interface intentionally asks for only <b>two dates</b>: one earlier observation (Time 0) and one later observation (Time 1). The application creates the compositing windows internally, so users do not need to enter four start/end dates.</p>
         <h3>AOI &amp; results</h3>
-        <p>Draw a polygon/rectangle or upload a Shapefile ZIP containing <b>.shp + .shx + .dbf + .prj</b>. The selected analysis then runs for that AOI. Results, map layers, PDF report and GeoTIFF belong only to that run.</p>
+        <p>Draw a polygon/rectangle or upload a Shapefile ZIP containing <b>.shp + .shx + .dbf + .prj</b>. Results, map layers, PDF report and GeoTIFF belong only to the selected analysis run.</p>
         <h3>Why separate the modules?</h3>
-        <p>The two methods answer different analytical questions and have different inputs and outputs. Separating them prevents unnecessary Earth Engine computation and makes every result traceable to exactly one method.</p>
+        <p>The two methods answer different analytical questions and have different inputs and outputs. Separating them prevents unnecessary Earth Engine computation and keeps each result traceable to exactly one method.</p>
         <div class="modal-footer-note">GeoAI Analysis · WebGIS Deforestation · Landsat · Google Earth Engine</div>
       </div>
     </section>
@@ -118,6 +120,6 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.min.js"></script>
   <script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script>
-  <script src="js/app.js?v=5"></script>
+  <script src="js/app.js?v=6"></script>
 </body>
 </html>
