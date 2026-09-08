@@ -18,7 +18,7 @@ from backend.report import build_report
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = ROOT / "frontend"
 
-app = FastAPI(title="GeoAI Deforestation WebGIS", version="1.1.0")
+app = FastAPI(title="GeoAI Deforestation WebGIS", version="1.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -34,8 +34,10 @@ class AnalysisRequest(BaseModel):
     # only that engine; it never executes both analysis methods in one run.
     module: Literal["deforestation", "ndfi_change"] = "deforestation"
     aoi: dict = Field(...)
-    time0: dict | None = None
-    time1: dict | None = None
+    # NDFI uses exactly two user-facing observation dates. The backend expands
+    # them into one-year centered compositing windows.
+    time0_date: str | None = None
+    time1_date: str | None = None
 
 
 @app.get("/api/health")
