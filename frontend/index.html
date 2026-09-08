@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>GeoAI Deforestation</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <aside id="sidebar">
+    <div class="brand"><div><h1>GeoAI Analysis</h1><p>Deforestation · Landsat</p></div><button id="collapse" class="icon-btn">‹</button></div>
+    <section class="panel-block">
+      <label>Module<select disabled><option>Deforestation</option></select></label>
+      <label>Benchmark period<select disabled><option>1990 → 2020</option></select></label>
+    </section>
+    <section class="panel-block">
+      <div class="section-title">AOI <span id="aoiBadge" class="badge">Not set</span></div>
+      <p class="hint">Draw a polygon/rectangle or upload a Shapefile ZIP. AOI is processed in Google Earth Engine.</p>
+      <div class="file-wrap"><input id="shp" type="file" accept=".zip"><label for="shp" class="file-label">Choose Shapefile ZIP</label><span id="fileName">No file chosen</span></div>
+      <p class="tiny">Required in ZIP: .shp + .shx + .dbf + .prj · Max 20 MB</p><div id="aoiMeta" class="aoi-meta" hidden></div>
+    </section>
+    <button id="run" class="primary">RUN ANALYSIS</button><button id="clear" class="secondary">CLEAR AOI</button>
+    <div id="status" class="status">Draw a polygon or rectangle on the map.</div>
+    <section id="results" class="results" hidden>
+      <div class="section-title">Result <span class="badge success">Ready</span></div>
+      <div class="metric-grid"><div class="metric-card"><span>2020 forest</span><strong id="currentArea">—</strong><small>ha</small></div><div class="metric-card"><span>1990 → 2020</span><strong id="changeArea">—</strong><small>ha change</small></div><div class="metric-card"><span>Forest cover</span><strong id="coverPct">—</strong><small>of AOI</small></div></div>
+      <div class="chart-card"><div class="chart-head"><span>Forest area</span><span>ha</span></div><canvas id="areaChart" height="160"></canvas></div>
+      <div class="download-grid"><a id="pdfBtn" class="download-btn disabled" href="#" target="_blank">PDF REPORT</a><a id="geoBtn" class="download-btn disabled" href="#" target="_blank">DOWNLOAD GEOTIFF</a></div>
+    </section>
+    <section class="method"><div class="section-title">Method & limits</div><div class="method-row"><span>Sensor</span><b>Landsat 4/5 + 8/9 C2 L2</b></div><div class="method-row"><span>Composite</span><b>Median · ±1 year</b></div><div class="method-row"><span>VI</span><b>(NIR − SWIR) / (NIR + SWIR)</b></div><div class="method-row"><span>Forest rule</span><b>VI &gt; 0.70</b></div><p class="tiny">Screening indicator, not a certified land-cover classification. Review cloud, shadow, drought, harvest and edge effects before formal reporting.</p></section>
+    <footer>Open satellite data · Google Earth Engine · Leaflet/OpenStreetMap</footer>
+  </aside>
+  <main id="map"></main><div id="mapHint" class="map-hint">Draw a polygon or rectangle on the map.</div><div id="loader" class="loader" hidden>Processing Earth Engine…</div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.min.js"></script><script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script><script src="js/app.js"></script>
+</body></html>
