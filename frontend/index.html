@@ -6,13 +6,20 @@
   <title>GeoAI Deforestation</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.css">
-  <link rel="stylesheet" href="css/style.css?v=3">
+  <link rel="stylesheet" href="css/style.css?v=4">
 </head>
 <body>
   <aside id="sidebar">
-    <div class="brand"><div><h1>GeoAI Analysis</h1><p>Deforestation · Landsat</p></div><button id="collapse" class="icon-btn">‹</button></div>
+    <div class="brand">
+      <div><h1>GeoAI Analysis</h1><p>Deforestation · Landsat</p></div>
+      <div class="brand-actions">
+        <button id="infoBtn" class="icon-btn info-btn" title="Project information" aria-label="Project information">i</button>
+        <button id="collapse" class="icon-btn" title="Collapse sidebar" aria-label="Collapse sidebar">‹</button>
+      </div>
+    </div>
     <section class="panel-block">
-      <label>Module<select disabled><option>Deforestation</option></select></label>
+      <div class="section-title"><span>Module</span><button id="moduleInfoBtn" class="mini-info" title="About this module" aria-label="About this module">i</button></div>
+      <select id="moduleSelect" disabled><option>Deforestation</option></select>
       <label>Benchmark period<select disabled><option>1990 → 2020</option></select></label>
     </section>
     <section class="panel-block">
@@ -31,6 +38,34 @@
     <section class="method"><div class="section-title">Method & limits</div><div class="method-row"><span>Sensor</span><b>Landsat 4/5 + 8/9 C2 L2</b></div><div class="method-row"><span>Composite</span><b>Median · ±1 year</b></div><div class="method-row"><span>VI</span><b>(NIR − SWIR) / (NIR + SWIR)</b></div><div class="method-row"><span>Forest rule</span><b>VI &gt; 0.70</b></div><p class="tiny">Screening indicator, not a certified land-cover classification. Review cloud, shadow, drought, harvest and edge effects before formal reporting.</p></section>
     <footer>Open satellite data · Google Earth Engine · Leaflet/OpenStreetMap</footer>
   </aside>
+  <button id="reopenSidebar" class="reopen-btn" title="Open sidebar" aria-label="Open sidebar">›</button>
   <main id="map"></main><div id="mapHint" class="map-hint">Draw a polygon or rectangle on the map.</div><div id="loader" class="loader" hidden>Processing Earth Engine…</div>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.min.js"></script><script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script><script src="js/app.js?v=3"></script>
+
+  <div id="infoModal" class="modal" hidden>
+    <div class="modal-backdrop" id="infoBackdrop"></div>
+    <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
+      <div class="modal-head"><div><p class="modal-eyebrow">WEBGIS PROJECT</p><h2 id="infoTitle">WebGIS Deforestation</h2><p class="modal-author">by Hazidien Ramadhan Utomo</p></div><button id="closeInfoBtn" class="icon-btn modal-close" title="Close information" aria-label="Close information">×</button></div>
+      <div class="modal-body">
+        <div class="info-callout"><b>Purpose</b><span>Interactive GIS for screening forest extent and long-term forest-area change using Landsat imagery processed with Google Earth Engine.</span></div>
+        <h3>How to use this WebGIS</h3>
+        <div class="info-list">
+          <div><b>1. Module</b><p>The current module is <b>Deforestation</b>. It applies the forest-extent workflow based on the supplied Landsat/VI method.</p></div>
+          <div><b>2. Benchmark period</b><p><b>1990 → 2020</b> is fixed for this module. The workflow evaluates 1990, 1995, 2000, 2005, 2010, 2015 and 2020.</p></div>
+          <div><b>3. AOI</b><p>Draw a polygon/rectangle directly on the map, or upload a Shapefile ZIP containing <b>.shp + .shx + .dbf + .prj</b>. Maximum upload size is 20 MB.</p></div>
+          <div><b>4. RUN ANALYSIS</b><p>Submits the AOI to the FastAPI backend, initializes Earth Engine and runs the remote-sensing workflow.</p></div>
+          <div><b>5. CLEAR AOI</b><p>Removes the AOI, result layers, map legend and previous result cards so another area can be analysed.</p></div>
+          <div><b>6. Result</b><p>After a successful run, the interface reports 2020 forest area, 1990–2020 area change and forest cover percentage.</p></div>
+          <div><b>7. Map layers</b><p>Use the Layers control to switch result overlays and compare benchmark outputs on the map.</p></div>
+          <div><b>8. Downloads</b><p><b>PDF REPORT</b> provides a summary report. <b>DOWNLOAD GEOTIFF</b> provides the generated raster download when available.</p></div>
+        </div>
+        <h3>Current analysis method</h3>
+        <div class="formula-box"><span>Landsat 4/5 or 8/9</span><span>→</span><span>Cloud mask</span><span>→</span><span>Median ±1 year</span><span>→</span><span>VI</span><span>→</span><span>VI &gt; 0.70</span><span>→</span><span>Forest area</span></div>
+        <p class="modal-note">VI = (NIR − SWIR) / (NIR + SWIR). The output is a screening indicator, not a certified land-cover classification.</p>
+        <h3>Map controls</h3><p>Use the drawing tools to create the AOI. Use <b>Layers</b> to switch overlays and the zoom controls to change scale. The sidebar can be collapsed and reopened at any time.</p>
+        <div class="modal-footer-note">GeoAI Analysis · Deforestation · Landsat · Google Earth Engine</div>
+      </div>
+    </section>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.min.js"></script><script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script><script src="js/app.js?v=4"></script>
 </body></html>
