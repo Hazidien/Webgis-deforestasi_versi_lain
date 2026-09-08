@@ -1,19 +1,29 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from backend.modules.deforestation.forest import analyze_deforestation
 from backend.report import build_report
 
+ROOT = Path(__file__).resolve().parents[1]
+FRONTEND_DIR = ROOT / "frontend"
+
 app = FastAPI(title="GeoAI Deforestation WebGIS", version="1.0.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 REPORTS: dict[str, bytes] = {}
 
@@ -31,7 +41,10 @@ def health() -> dict[str, str]:
 @app.post("/api/analyze")
 def analyze(request: AnalysisRequest) -> dict:
     if request.aoi.get("type") not in {"Polygon", "MultiPolygon"}:
-        raise HTTPException(status_code=400, detail="AOI must be a GeoJSON Polygon or MultiPolygon.")
+        raise HTTPException(
+            status_code=400,
+            detail="AOI must be a GeoJSON Polygon or MultiPolygon.",
+        )
     try:
         result = analyze_deforestation(request.model_dump())
         result["generated_at"] = datetime.now(timezone.utc).isoformat()
@@ -44,7 +57,10 @@ def analyze(request: AnalysisRequest) -> dict:
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"GEE processing failed: {exc}") from exc
+        raise HTTPException(
+            status_code=500,
+            detail=f"GEE processing failed: {exc}",
+        ) from exc
 
 
 @app.get("/api/report/{report_id}")
@@ -57,3 +73,8 @@ def report(report_id: str) -> Response:
         media_type="application/pdf",
         headers={"Content-Disposition": 'inline; filename="deforestation_report.pdf"'},
     )
+
+
+# Serve the complete Leaflet WebGIS frontend from the same port as the API.
+# API routes above remain available because they are registered before this mount.
+app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
