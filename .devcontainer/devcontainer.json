@@ -1,15 +1,12 @@
 {
   "name": "WebGIS Deforestation",
   "image": "mcr.microsoft.com/devcontainers/python:3.13-bookworm",
-  "features": {
-    "ghcr.io/dhoeric/features/google-cloud-cli:1": {}
-  },
   "forwardPorts": [8000],
   "portsAttributes": {
     "8000": {
       "label": "GeoAI Deforestation WebGIS",
-      "onAutoForward": "openBrowser"
+      "onAutoForward": "notify"
     }
   },
-  "postCreateCommand": "python --version && python -c \"import sys; assert sys.version_info[:2] == (3, 13), f'Expected Python 3.13, got {sys.version}'\" && gcloud --version && python -m pip install --upgrade pip && python -m pip install -r requirements.txt"
+  "postCreateCommand": "python --version && python -c \"import sys; assert sys.version_info[:2] == (3, 13), f'Expected Python 3.13, got {sys.version}'\" && python -m pip install --upgrade pip && python -m pip install -r requirements.txt"
 }
