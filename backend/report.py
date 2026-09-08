@@ -23,70 +23,134 @@ def build_report(result: dict[str, Any]) -> bytes:
         author="WebGIS Deforestation",
     )
     styles = getSampleStyleSheet()
-    story = [
-        Paragraph("GeoAI Deforestation Analysis", styles["Title"]),
-        Paragraph("Landsat-based forest screening using the supplied GEE workflow", styles["Normal"]),
-        Spacer(1, 5 * mm),
-    ]
+    module = result.get("module", "deforestation")
 
-    summary = [
-        ["AOI area", f"{result.get('aoi_area_ha', 0):,.2f} ha"],
-        ["Baseline forest (1990)", f"{result.get('baseline_area_ha', 0):,.2f} ha"],
-        ["Current forest (2020)", f"{result.get('current_area_ha', 0):,.2f} ha"],
-        ["Change 1990 → 2020", f"{result.get('change_ha', 0):,.2f} ha"],
-        ["Current forest cover", _pct(result.get("forest_cover_pct"))],
-    ]
-    table = Table(summary, colWidths=[65 * mm, 95 * mm])
-    table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#E9EEF6")),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#B6C1D0")),
-                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("PADDING", (0, 0), (-1, -1), 6),
-            ]
+    if module == "ndfi_change":
+        story = [
+            Paragraph("GeoAI Deforestation & NDFI Change Report", styles["Title"]),
+            Paragraph("SMA/NDFI two-date forest change screening", styles["Normal"]),
+            Spacer(1, 5 * mm),
+        ]
+        time0 = result.get("time0", {})
+        time1 = result.get("time1", {})
+        area = result.get("area_by_class_ha", {})
+        classes = result.get("classes", {})
+        summary = [
+            ["AOI area", f"{result.get('aoi_area_ha', 0):,.2f} ha"],
+            ["Time 0", f"{time0.get('start', '—')} → {time0.get('end', '—')}"],
+            ["Time 1", f"{time1.get('start', '—')} → {time1.get('end', '—')}"],
+            ["Forest at Time 0", f"{result.get('forest_t0_area_ha', 0):,.2f} ha"],
+            ["Deforestation", f"{float(area.get(3, area.get('3', 0)) or 0):,.2f} ha"],
+            ["Logging", f"{float(area.get(2, area.get('2', 0)) or 0):,.2f} ha"],
+            ["Vegetation regrowth", f"{float(area.get(4, area.get('4', 0)) or 0):,.2f} ha"],
+        ]
+        table = Table(summary, colWidths=[65 * mm, 95 * mm])
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#E9EEF6")),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#B6C1D0")),
+                    ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("PADDING", (0, 0), (-1, -1), 6),
+                ]
+            )
         )
-    )
-    story.extend([table, Spacer(1, 6 * mm)])
+        story.extend([table, Spacer(1, 6 * mm)])
 
-    story.append(Paragraph("Forest area by benchmark year", styles["Heading2"]))
-    area_rows = [["Year", "Forest area (ha)"]]
-    for year in result.get("years", []):
-        value = result.get("area_by_year", {}).get(year, result.get("area_by_year", {}).get(str(year), 0))
-        area_rows.append([str(year), f"{float(value or 0):,.2f}"])
-    area_table = Table(area_rows, colWidths=[45 * mm, 70 * mm])
-    area_table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#18243A")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#B6C1D0")),
-                ("PADDING", (0, 0), (-1, -1), 5),
-            ]
+        story.append(Paragraph("Change classification", styles["Heading2"]))
+        rows = [["Class", "Area (ha)"]]
+        for value in (1, 2, 3, 4):
+            name = classes.get(value, classes.get(str(value), str(value)))
+            rows.append([str(name), f"{float(area.get(value, area.get(str(value), 0)) or 0):,.2f}"])
+        class_table = Table(rows, colWidths=[85 * mm, 70 * mm])
+        class_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#18243A")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#B6C1D0")),
+                    ("PADDING", (0, 0), (-1, -1), 5),
+                ]
+            )
         )
-    )
-    story.extend([area_table, Spacer(1, 6 * mm)])
+        story.extend([class_table, Spacer(1, 6 * mm)])
 
-    story.append(Paragraph("Method", styles["Heading2"]))
-    story.append(
-        Paragraph(
-            "Landsat 4/5 are used before 2014 and Landsat 8/9 from 2014 onward. "
-            "Cloud, cirrus and shadow flags follow the supplied QA_PIXEL masks. "
-            "Each benchmark uses a median composite over the stated ±1 year window. "
-            "The vegetation index is (NIR - SWIR) / (NIR + SWIR), with forest defined at VI > 0.7. "
-            "Forest area is derived from pixel area in hectares.",
-            styles["BodyText"],
+        story.append(Paragraph("Method", styles["Heading2"]))
+        story.append(Paragraph(result.get("method", "SMA/NDFI change detection."), styles["BodyText"]))
+        story.append(Spacer(1, 4 * mm))
+        story.append(Paragraph("Thresholds", styles["Heading2"]))
+        story.append(
+            Paragraph(
+                "No forest change: -0.095 to 0.095; Logging: -0.250 to -0.095; "
+                "Deforestation: below -0.250; Vegetation regrowth: above 0.095; "
+                "forest mask at NDFI Time 0 > 0.60.",
+                styles["BodyText"],
+            )
         )
-    )
-    story.append(Spacer(1, 4 * mm))
-    story.append(Paragraph("Limit", styles["Heading2"]))
-    story.append(
-        Paragraph(
-            result.get("note", "Remote-sensing screening output."),
-            styles["BodyText"],
+        story.append(Spacer(1, 4 * mm))
+        story.append(Paragraph("Limit", styles["Heading2"]))
+        story.append(Paragraph(result.get("note", "Remote-sensing screening output."), styles["BodyText"]))
+    else:
+        story = [
+            Paragraph("GeoAI Deforestation Analysis", styles["Title"]),
+            Paragraph("Landsat-based forest screening using the supplied GEE workflow", styles["Normal"]),
+            Spacer(1, 5 * mm),
+        ]
+
+        summary = [
+            ["AOI area", f"{result.get('aoi_area_ha', 0):,.2f} ha"],
+            ["Baseline forest (1990)", f"{result.get('baseline_area_ha', 0):,.2f} ha"],
+            ["Current forest (2020)", f"{result.get('current_area_ha', 0):,.2f} ha"],
+            ["Change 1990 → 2020", f"{result.get('change_ha', 0):,.2f} ha"],
+            ["Current forest cover", _pct(result.get("forest_cover_pct"))],
+        ]
+        table = Table(summary, colWidths=[65 * mm, 95 * mm])
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#E9EEF6")),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#B6C1D0")),
+                    ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("PADDING", (0, 0), (-1, -1), 6),
+                ]
+            )
         )
-    )
+        story.extend([table, Spacer(1, 6 * mm)])
+
+        story.append(Paragraph("Forest area by benchmark year", styles["Heading2"]))
+        area_rows = [["Year", "Forest area (ha)"]]
+        for year in result.get("years", []):
+            value = result.get("area_by_year", {}).get(year, result.get("area_by_year", {}).get(str(year), 0))
+            area_rows.append([str(year), f"{float(value or 0):,.2f}"])
+        area_table = Table(area_rows, colWidths=[45 * mm, 70 * mm])
+        area_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#18243A")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#B6C1D0")),
+                    ("PADDING", (0, 0), (-1, -1), 5),
+                ]
+            )
+        )
+        story.extend([area_table, Spacer(1, 6 * mm)])
+
+        story.append(Paragraph("Method", styles["Heading2"]))
+        story.append(
+            Paragraph(
+                "Landsat 4/5 are used before 2014 and Landsat 8/9 from 2014 onward. "
+                "Cloud, cirrus and shadow flags follow the supplied QA_PIXEL masks. "
+                "Each benchmark uses a median composite over the stated ±1 year window. "
+                "The vegetation index is (NIR - SWIR) / (NIR + SWIR), with forest defined at VI > 0.7. "
+                "Forest area is derived from pixel area in hectares.",
+                styles["BodyText"],
+            )
+        )
+        story.append(Spacer(1, 4 * mm))
+        story.append(Paragraph("Limit", styles["Heading2"]))
+        story.append(Paragraph(result.get("note", "Remote-sensing screening output."), styles["BodyText"]))
 
     doc.build(story)
     return buffer.getvalue()
