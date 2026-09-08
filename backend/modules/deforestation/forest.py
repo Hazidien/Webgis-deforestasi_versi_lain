@@ -9,14 +9,9 @@ from backend.config import initialize_gee
 # ===========================
 # DATASETS REQUIRED BY THE SUPPLIED GEE LOGIC
 # ===========================
-# The processing logic below keeps the supplied year list, cloud masks,
-# composite rules, VI formula, forest threshold, forest-area calculation,
-# forest-year aggregation, and 90 m chart scale unchanged.
-l4 = ee.ImageCollection("LANDSAT/LT04/C02/T1_L2")
-l5 = ee.ImageCollection("LANDSAT/LT05/C02/T1_L2")
-l8 = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2")
-l9 = ee.ImageCollection("LANDSAT/LC09/C02/T1_L2")
-
+# Keep the supplied year list, cloud masks, composite rules, VI formula,
+# forest threshold, forest-area calculation, forest-year aggregation,
+# and 90 m chart scale unchanged.
 YEAR_LIST = [1990, 1995, 2000, 2005, 2010, 2015, 2020]
 PALETTE = ["4B0082", "B22222", "FF4500", "FFD700", "FFFF00", "ADFF2F", "228B22"]
 LABEL_LIST = [
@@ -28,6 +23,16 @@ LABEL_LIST = [
     "2015 - 2020",
     "Current forest",
 ]
+
+
+def _collections() -> tuple[ee.ImageCollection, ee.ImageCollection, ee.ImageCollection, ee.ImageCollection]:
+    """Create EE collections only after Earth Engine has been initialized."""
+    return (
+        ee.ImageCollection("LANDSAT/LT04/C02/T1_L2"),
+        ee.ImageCollection("LANDSAT/LT05/C02/T1_L2"),
+        ee.ImageCollection("LANDSAT/LC08/C02/T1_L2"),
+        ee.ImageCollection("LANDSAT/LC09/C02/T1_L2"),
+    )
 
 
 def filterCol(col: ee.ImageCollection, roi: ee.Geometry, date: list[ee.Date]) -> ee.ImageCollection:
@@ -82,17 +87,28 @@ def cloudMaskOli(image: ee.Image) -> ee.Image:
     )
 
 
-def landsat457(roi: ee.Geometry, date: list[ee.Date]) -> ee.Image:
+def landsat457(
+    roi: ee.Geometry,
+    date: list[ee.Date],
+    l4: ee.ImageCollection,
+    l5: ee.ImageCollection,
+) -> ee.Image:
     col = filterCol(l4, roi, date).merge(filterCol(l5, roi, date))
     return col.map(cloudMaskTm).median().clip(roi)
 
 
-def landsat89(roi: ee.Geometry, date: list[ee.Date]) -> ee.Image:
+def landsat89(
+    roi: ee.Geometry,
+    date: list[ee.Date],
+    l8: ee.ImageCollection,
+    l9: ee.ImageCollection,
+) -> ee.Image:
     col = filterCol(l8, roi, date).merge(filterCol(l9, roi, date))
     return col.map(cloudMaskOli).median().clip(roi)
 
 
 def build_forest_collection(roi: ee.Geometry) -> ee.ImageCollection:
+    l4, l5, l8, l9 = _collections()
     images: list[ee.Image] = []
 
     # ===========================
@@ -104,7 +120,11 @@ def build_forest_collection(roi: ee.Geometry) -> ee.ImageCollection:
         date = [start, end]
 
         landsat = landsat457 if year < 2014 else landsat89
-        image = landsat(roi, date)
+        image = (
+            landsat(roi, date, l4, l5)
+            if year < 2014
+            else landsat(roi, date, l8, l9)
+        )
 
         # Vegetation index (NIR-SWIR)/(NIR+SWIR)
         bandMap = {"NIR": image.select("B5"), "SWIR": image.select("B7")}
@@ -141,6 +161,7 @@ def _reduce_year_area(image: ee.Image, roi: ee.Geometry) -> ee.Feature:
 
 
 def analyze_deforestation(request: dict[str, Any]) -> dict[str, Any]:
+    # IMPORTANT: initialize GEE before creating any ImageCollection objects.
     initialize_gee()
 
     roi = ee.Geometry(request["aoi"])
