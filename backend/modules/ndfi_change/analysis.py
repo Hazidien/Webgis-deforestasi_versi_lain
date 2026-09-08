@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import Any
 
 import ee
@@ -65,6 +66,22 @@ def get_ndfi(sma_image: ee.Image) -> ee.Image:
     return ndfi
 
 
+def _one_year_window(selected_date: str) -> tuple[str, str]:
+    """Turn one UI observation date into a one-year compositing window.
+
+    The selected date is treated as the center of the observation period.
+    This keeps the UI to two dates while retaining the Course 2 idea of
+    building NDFI from an image collection rather than a single scene.
+    """
+    try:
+        center = date.fromisoformat(selected_date)
+    except ValueError as exc:
+        raise ValueError(f"Invalid observation date: {selected_date}") from exc
+    start = center - timedelta(days=182)
+    end = center + timedelta(days=183)
+    return start.isoformat(), end.isoformat()
+
+
 def build_period(roi: ee.Geometry, start: str, end: str) -> tuple[ee.Image, ee.Image]:
     collection = (
         ee.ImageCollection("LANDSAT/LC08/C02/T1_L2")
@@ -105,17 +122,18 @@ def analyze_ndfi_change(request: dict[str, Any]) -> dict[str, Any]:
     initialize_gee()
 
     roi = ee.Geometry(request["aoi"])
-    time0 = request.get("time0") or {}
-    time1 = request.get("time1") or {}
-    start0, end0 = time0.get("start"), time0.get("end")
-    start1, end1 = time1.get("start"), time1.get("end")
+    observation0 = request.get("time0_date")
+    observation1 = request.get("time1_date")
 
-    if not all(isinstance(v, str) and v for v in (start0, end0, start1, end1)):
-        raise ValueError("NDFI analysis requires start and end dates for Time 0 and Time 1.")
-    if start0 >= end0 or start1 >= end1:
-        raise ValueError("Each NDFI time window must have Start before End.")
-    if start0 == start1 and end0 == end1:
-        raise ValueError("Time 0 and Time 1 must use different date ranges.")
+    if not all(isinstance(v, str) and v for v in (observation0, observation1)):
+        raise ValueError("NDFI analysis requires one observation date for Time 0 and one for Time 1.")
+    if observation0 == observation1:
+        raise ValueError("Time 0 and Time 1 must be different observation dates.")
+    if observation0 > observation1:
+        raise ValueError("Time 0 must be earlier than Time 1.")
+
+    start0, end0 = _one_year_window(observation0)
+    start1, end1 = _one_year_window(observation1)
 
     image_time0, sma_time0 = build_period(roi, start0, end0)
     image_time1, sma_time1 = build_period(roi, start1, end1)
@@ -153,7 +171,7 @@ def analyze_ndfi_change(request: dict[str, Any]) -> dict[str, Any]:
 
     layer_specs = [
         (
-            f"Landsat RGB · Time 0 ({start0} → {end0})",
+            f"Landsat RGB · Time 0 ({observation0})",
             image_time0,
             {"bands": ["SR_B4", "SR_B3", "SR_B2"], "min": 0, "max": 0.4, "gamma": 1},
         ),
@@ -178,7 +196,7 @@ def analyze_ndfi_change(request: dict[str, Any]) -> dict[str, Any]:
             {"min": -1, "max": 1, "palette": NDFI_PALETTE},
         ),
         (
-            f"Landsat RGB · Time 1 ({start1} → {end1})",
+            f"Landsat RGB · Time 1 ({observation1})",
             image_time1,
             {"bands": ["SR_B4", "SR_B3", "SR_B2"], "min": 0, "max": 0.4, "gamma": 1},
         ),
@@ -228,8 +246,8 @@ def analyze_ndfi_change(request: dict[str, Any]) -> dict[str, Any]:
         "success": True,
         "module": "ndfi_change",
         "aoi_area_ha": aoi_area_ha,
-        "time0": {"start": start0, "end": end0},
-        "time1": {"start": start1, "end": end1},
+        "time0": {"date": observation0, "start": start0, "end": end0},
+        "time1": {"date": observation1, "start": start1, "end": end1},
         "forest_t0_area_ha": forest_t0_area_ha,
         "area_by_class_ha": areas,
         "classes": CLASS_LABELS,
@@ -241,6 +259,7 @@ def analyze_ndfi_change(request: dict[str, Any]) -> dict[str, Any]:
             "forest_mask": 0.60,
         },
         "dataset": "LANDSAT/LC08/C02/T1_L2",
+        "composite": "One-year Landsat 8 median window centered on each selected observation date",
         "method": "Landsat 8 → cloud/saturation mask → median composite → SMA → GV/NPV/Soil/Cloud → Shade/GVs → NDFI → NDFI t1 - NDFI t0",
         "classification_map": {
             "tile_url": primary_map["tile_fetcher"].url_format,
@@ -249,7 +268,8 @@ def analyze_ndfi_change(request: dict[str, Any]) -> dict[str, Any]:
         "layers": layers,
         "geotiff_url": geotiff_url,
         "note": (
-            "NDFI change classification follows the supplied Course 2 thresholds and masks out pixels where NDFI at Time 0 is not above 0.60. "
+            "The UI uses two observation dates. Each date is expanded to a one-year compositing window centered on that date, "
+            "while the SMA, NDFI formula, thresholds and Time 0 forest mask follow the supplied Course 1 and Course 2 workflow. "
             "The output is a remote-sensing screening result and should be validated before formal reporting."
         ),
     }
