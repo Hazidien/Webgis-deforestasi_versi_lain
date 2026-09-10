@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>GeoAI Deforestation</title>
+  <title>WebGIS Deforestation</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.css">
-  <link rel="stylesheet" href="css/style.css?v=6">
+  <link rel="stylesheet" href="css/style.css?v=7">
 </head>
 <body>
   <aside id="sidebar">
     <div class="brand">
-      <div><h1>GeoAI Analysis</h1><p id="moduleSubtitle">Deforestation · Landsat</p></div>
+      <div><h1>Deforestation Analysis</h1><p id="moduleSubtitle">Deforestation · Landsat</p></div>
       <div class="brand-actions">
         <button id="infoBtn" class="icon-btn info-btn" title="Project information" aria-label="Project information">i</button>
         <button id="collapse" class="icon-btn" title="Collapse sidebar" aria-label="Collapse sidebar">‹</button>
@@ -24,18 +24,8 @@
         <option value="deforestation">Deforestation</option>
         <option value="ndfi_change">NDFI Change Detection</option>
       </select>
-
-      <div id="deforestationControls">
-        <label>Benchmark period<select disabled><option>1990 → 2020</option></select></label>
-      </div>
-
-      <div id="ndfiControls" hidden>
-        <div class="date-grid">
-          <label>Time 0 · Before<input id="time0Date" type="date" value="2020-01-01"></label>
-          <label>Time 1 · After<input id="time1Date" type="date" value="2024-01-01"></label>
-        </div>
-        <p class="tiny">Select two observation dates. Each date is expanded automatically into a one-year Landsat 8 median window for the NDFI calculation.</p>
-      </div>
+      <div id="deforestationControls"><label>Benchmark period<select disabled><option>1990 → 2020</option></select></label></div>
+      <div id="ndfiControls" hidden><div class="date-grid"><label>Time 0 · Before<input id="time0Date" type="date" value="2020-01-01"></label><label>Time 1 · After<input id="time1Date" type="date" value="2024-01-01"></label></div><p class="tiny">Select two observation dates. Each date is expanded automatically into a one-year Landsat 8 median window for the NDFI calculation.</p></div>
     </section>
 
     <section class="panel-block">
@@ -51,38 +41,15 @@
 
     <section id="results" class="results" hidden>
       <div class="section-title">Result <span class="badge success">Ready</span></div>
-      <div id="deforestationResults" class="metric-grid">
-        <div class="metric-card"><span>2020 forest</span><strong id="currentArea">—</strong><small>ha</small></div>
-        <div class="metric-card"><span>1990 → 2020</span><strong id="changeArea">—</strong><small>ha change</small></div>
-        <div class="metric-card"><span>Forest cover</span><strong id="coverPct">—</strong><small>of AOI</small></div>
-      </div>
-      <div id="ndfiResults" class="ndfi-results" hidden>
-        <div class="metric-grid">
-          <div class="metric-card"><span>Forest · Time 0</span><strong id="forestT0">—</strong><small>ha</small></div>
-          <div class="metric-card"><span>Deforestation</span><strong id="deforestationArea">—</strong><small>ha</small></div>
-          <div class="metric-card"><span>Logging</span><strong id="loggingArea">—</strong><small>ha</small></div>
-          <div class="metric-card"><span>Regrowth</span><strong id="regrowthArea">—</strong><small>ha</small></div>
-        </div>
-      </div>
+      <div id="deforestationResults" class="metric-grid"><div class="metric-card"><span>2020 forest</span><strong id="currentArea">—</strong><small>ha</small></div><div class="metric-card"><span>1990 → 2020</span><strong id="changeArea">—</strong><small>ha change</small></div><div class="metric-card"><span>Forest cover</span><strong id="coverPct">—</strong><small>of AOI</small></div></div>
+      <div id="ndfiResults" class="ndfi-results" hidden><div class="metric-grid"><div class="metric-card"><span>Forest · Time 0</span><strong id="forestT0">—</strong><small>ha</small></div><div class="metric-card"><span>Deforestation</span><strong id="deforestationArea">—</strong><small>ha</small></div><div class="metric-card"><span>Logging</span><strong id="loggingArea">—</strong><small>ha</small></div><div class="metric-card"><span>Regrowth</span><strong id="regrowthArea">—</strong><small>ha</small></div></div></div>
       <div class="download-grid"><a id="pdfBtn" class="download-btn disabled" href="#" target="_blank">PDF REPORT</a><a id="geoBtn" class="download-btn disabled" href="#" target="_blank">DOWNLOAD GEOTIFF</a></div>
     </section>
 
     <section class="method">
       <div class="section-title">Selected method <span id="methodModule" class="badge">Deforestation</span></div>
-      <div id="deforestationMethod">
-        <div class="method-row"><span>Sensor</span><b>Landsat 4/5 + 8/9 C2 L2</b></div>
-        <div class="method-row"><span>Composite</span><b>Median · ±1 year</b></div>
-        <div class="method-row"><span>VI</span><b>(NIR − SWIR) / (NIR + SWIR)</b></div>
-        <div class="method-row"><span>Forest rule</span><b>VI &gt; 0.70</b></div>
-        <p class="tiny">Forest extent screening across benchmark years 1990, 1995, 2000, 2005, 2010, 2015 and 2020.</p>
-      </div>
-      <div id="ndfiMethod" hidden>
-        <div class="method-row"><span>Sensor</span><b>Landsat 8 C2 L2</b></div>
-        <div class="method-row"><span>Model</span><b>SMA → NDFI</b></div>
-        <div class="method-row"><span>Observation</span><b>Time 0 → Time 1</b></div>
-        <div class="method-row"><span>Forest mask</span><b>NDFI t0 &gt; 0.60</b></div>
-        <p class="tiny">Each selected date becomes a one-year median window. NDFI Change = NDFI Time 1 − NDFI Time 0.</p>
-      </div>
+      <div id="deforestationMethod"><div class="method-row"><span>Sensor</span><b>Landsat 4/5 + 8/9 C2 L2</b></div><div class="method-row"><span>Composite</span><b>Median · ±1 year</b></div><div class="method-row"><span>VI</span><b>(NIR − SWIR) / (NIR + SWIR)</b></div><div class="method-row"><span>Forest rule</span><b>VI &gt; 0.70</b></div><p class="tiny">Forest extent screening across benchmark years 1990, 1995, 2000, 2005, 2010, 2015 and 2020.</p></div>
+      <div id="ndfiMethod" hidden><div class="method-row"><span>Sensor</span><b>Landsat 8 C2 L2</b></div><div class="method-row"><span>Model</span><b>SMA → NDFI</b></div><div class="method-row"><span>Observation</span><b>Time 0 → Time 1</b></div><div class="method-row"><span>Forest mask</span><b>NDFI t0 &gt; 0.60</b></div><p class="tiny">Each selected date becomes a one-year median window. NDFI Change = NDFI Time 1 − NDFI Time 0.</p></div>
       <p class="tiny">Screening indicator, not a certified land-cover classification. Review cloud, shadow, drought, harvest and edge effects before formal reporting.</p>
     </section>
     <footer>Open satellite data · Google Earth Engine · Leaflet/OpenStreetMap</footer>
@@ -93,26 +60,22 @@
   <div id="mapHint" class="map-hint">Draw a polygon or rectangle on the map.</div>
   <div id="loader" class="loader" hidden>Processing selected analysis in Earth Engine…</div>
 
-  <div id="infoModal" class="modal" hidden>
+  <div id="infoModal" class="modal" aria-hidden="false">
     <div class="modal-backdrop" id="infoBackdrop"></div>
     <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
-      <div class="modal-head"><div><p class="modal-eyebrow">WEBGIS PROJECT</p><h2 id="infoTitle">WebGIS Deforestation</h2><p class="modal-author">by Hazidien Ramadhan Utomo</p></div><button id="closeInfoBtn" class="icon-btn modal-close" title="Close information" aria-label="Close information">×</button></div>
-      <div class="modal-body">
-        <div class="info-callout"><b>Purpose</b><span>Interactive GIS for forest screening and forest-change analysis using Landsat imagery processed with Google Earth Engine.</span></div>
-        <h3>One run = one analysis</h3>
-        <p>Choose <b>one module only</b>. RUN executes only the selected engine; Deforestation and NDFI Change Detection are never executed together in the same request.</p>
-        <h3>Available modules</h3>
-        <div class="info-list">
-          <div><b>Deforestation</b><p>Long-term forest extent screening using the supplied workflow: Landsat 4/5 + 8/9, median ±1 year, VI = (NIR − SWIR)/(NIR + SWIR), forest rule VI &gt; 0.70, with fixed benchmark years 1990–2020.</p></div>
-          <div><b>NDFI Change Detection</b><p>Two-date SMA/NDFI workflow based on the supplied Course 1 and Course 2 material. Time 0 and Time 1 are two user-selected observation dates; each is expanded to a one-year median Landsat 8 window, then NDFI Change is calculated and classified.</p></div>
+      <div class="modal-head">
+        <div class="modal-title-wrap">
+          <p class="modal-eyebrow">REMOTE SENSING · WEBGIS</p>
+          <h2 id="infoTitle">WebGIS Deforestation</h2>
+          <p class="modal-author">by Hazidien Ramadhan Utomo</p>
         </div>
-        <h3>NDFI dates</h3>
-        <p>The interface intentionally asks for only <b>two dates</b>: one earlier observation (Time 0) and one later observation (Time 1). The application creates the compositing windows internally, so users do not need to enter four start/end dates.</p>
-        <h3>AOI &amp; results</h3>
-        <p>Draw a polygon/rectangle or upload a Shapefile ZIP containing <b>.shp + .shx + .dbf + .prj</b>. Results, map layers, PDF report and GeoTIFF belong only to the selected analysis run.</p>
-        <h3>Why separate the modules?</h3>
-        <p>The two methods answer different analytical questions and have different inputs and outputs. Separating them prevents unnecessary Earth Engine computation and keeps each result traceable to exactly one method.</p>
-        <div class="modal-footer-note">GeoAI Analysis · WebGIS Deforestation · Landsat · Google Earth Engine</div>
+        <button id="closeInfoBtn" class="icon-btn modal-close" title="Close information" aria-label="Close information">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-intro">Analisis perubahan tutupan hutan berbasis citra Landsat dan Google Earth Engine untuk membantu mengidentifikasi pola kehilangan dan perubahan area hutan.</p>
+        <div class="modal-steps"><div><b>1</b><span>Tentukan area analisis (AOI) dengan menggambar polygon/rectangle atau mengunggah Shapefile.</span></div><div><b>2</b><span>Pilih metode analisis yang ingin dijalankan.</span></div><div><b>3</b><span>Jalankan analisis untuk melihat hasil luas hutan dan perubahan tutupan hutan.</span></div></div>
+        <p class="modal-note"><b>Catatan:</b> hasil merupakan <i>remote-sensing screening indicator</i>, bukan klasifikasi tutupan lahan tersertifikasi. Periksa cloud, shadow, musim, kekeringan, panen, dan efek piksel campuran sebelum pelaporan formal.</p>
+        <button id="startAnalysisBtn" class="start-btn" type="button">START ANALYSIS</button>
       </div>
     </section>
   </div>
@@ -120,6 +83,6 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.min.js"></script>
   <script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script>
-  <script src="js/app.js?v=6"></script>
+  <script src="js/app.js?v=7"></script>
 </body>
 </html>
