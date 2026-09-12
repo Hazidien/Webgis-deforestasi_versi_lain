@@ -242,6 +242,18 @@ def analyze_ndfi_change(request: dict[str, Any]) -> dict[str, Any]:
         }
     )
 
+    try:
+        map_image_url = classification.getThumbURL({
+            "region": request["aoi"],
+            "dimensions": 1100,
+            "format": "png",
+            "min": 0,
+            "max": 4,
+            "palette": CLASS_PALETTE,
+        })
+    except Exception:
+        map_image_url = None
+
     return {
         "success": True,
         "module": "ndfi_change",
@@ -267,6 +279,7 @@ def analyze_ndfi_change(request: dict[str, Any]) -> dict[str, Any]:
         },
         "layers": layers,
         "geotiff_url": geotiff_url,
+        "map_image_url": map_image_url,
         "note": (
             "The UI uses two observation dates. Each date is expanded to a one-year compositing window centered on that date, "
             "while the SMA, NDFI formula, thresholds and Time 0 forest mask follow the supplied Course 1 and Course 2 workflow. "
