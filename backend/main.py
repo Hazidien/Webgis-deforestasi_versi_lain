@@ -28,6 +28,7 @@ app.add_middleware(
 )
 
 REPORTS: dict[str, bytes] = {}
+REPORT_RESULTS: dict[str, dict] = {}
 GEOTIFF_URLS: dict[str, str] = {}
 
 
@@ -76,27 +77,20 @@ def analyze(request: AnalysisRequest) -> dict:
             GEOTIFF_URLS[report_id] = geotiff_url
             result["geotiff_url"] = f"/api/geotiff/{report_id}"
 
-        # Download the static Earth Engine thumbnail once, then embed its
-        # bytes in the generated PDF. The interactive map is not changed.
-        map_image_url = result.get("map_image_url")
-        if map_image_url:
-            try:
-                image_request = Request(
-                    map_image_url,
-                    headers={"User-Agent": "GeoAI-Deforestation-WebGIS/1.0"},
-                )
-                with urlopen(image_request, timeout=120) as upstream:
-                    result["map_image_bytes"] = upstream.read()
-            except Exception:
-                result["map_image_bytes"] = None
+        # IMPORTANT: do not download the PDF map image here. The analysis
+        # response must return as soon as the original GEE analysis finishes.
+        # The map thumbnail is downloaded only when the user opens the PDF.
+        # This prevents a slow thumbnail request from making /api/analyze
+        # return an empty/timeout response in Codespaces for large AOIs.
+        REPORT_RESULTS[report_id] = dict(result)
 
-        REPORTS[report_id] = build_report(result)
         if len(REPORTS) > 20:
             REPORTS.pop(next(iter(REPORTS)))
+        if len(REPORT_RESULTS) > 20:
+            REPORT_RESULTS.pop(next(iter(REPORT_RESULTS)))
         if len(GEOTIFF_URLS) > 20:
             GEOTIFF_URLS.pop(next(iter(GEOTIFF_URLS)))
 
-        result.pop("map_image_bytes", None)
         result.pop("map_image_url", None)
         result["report_url"] = f"/api/report/{report_id}"
         return result
@@ -111,9 +105,42 @@ def analyze(request: AnalysisRequest) -> dict:
 
 @app.get("/api/report/{report_id}")
 def report(report_id: str) -> Response:
-    pdf = REPORTS.get(report_id)
-    if pdf is None:
+    cached_pdf = REPORTS.get(report_id)
+    if cached_pdf is not None:
+        return Response(
+            content=cached_pdf,
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'inline; filename="deforestation_report.pdf"'},
+        )
+
+    result = REPORT_RESULTS.get(report_id)
+    if result is None:
         raise HTTPException(status_code=404, detail="Report expired or was not found.")
+
+    # Generate the report lazily so the expensive thumbnail download cannot
+    # block the analysis endpoint. If the thumbnail is unavailable, report.py
+    # still creates the PDF and states that the map image was unavailable.
+    report_result = dict(result)
+    map_image_url = report_result.get("map_image_url")
+    if map_image_url:
+        try:
+            image_request = Request(
+                map_image_url,
+                headers={"User-Agent": "GeoAI-Deforestation-WebGIS/1.0"},
+            )
+            with urlopen(image_request, timeout=120) as upstream:
+                report_result["map_image_bytes"] = upstream.read()
+        except Exception:
+            report_result["map_image_bytes"] = None
+
+    try:
+        pdf = build_report(report_result)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {exc}") from exc
+
+    REPORTS[report_id] = pdf
+    REPORT_RESULTS.pop(report_id, None)
+
     return Response(
         content=pdf,
         media_type="application/pdf",
