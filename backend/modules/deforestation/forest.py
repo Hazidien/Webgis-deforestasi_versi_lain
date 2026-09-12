@@ -226,6 +226,18 @@ def analyze_deforestation(request: dict[str, Any]) -> dict[str, Any]:
     except Exception:
         geotiff_url = None
 
+    try:
+        map_image_url = forestYear.getThumbURL({
+            "region": request["aoi"],
+            "dimensions": 1100,
+            "format": "png",
+            "min": 1990,
+            "max": 2020,
+            "palette": PALETTE,
+        })
+    except Exception:
+        map_image_url = None
+
     return {
         "success": True,
         "module": "deforestation",
@@ -252,6 +264,7 @@ def analyze_deforestation(request: dict[str, Any]) -> dict[str, Any]:
         },
         "layers": layers,
         "geotiff_url": geotiff_url,
+        "map_image_url": map_image_url,
         "note": (
             "Forest is screened where (NIR - SWIR) / (NIR + SWIR) > 0.7. "
             "The map and area series are remote-sensing screening outputs and should be field-validated before certified reporting."
