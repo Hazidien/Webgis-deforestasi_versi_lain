@@ -3,6 +3,7 @@ from __future__ import annotations
 from io import BytesIO
 from typing import Any
 
+import reportlab
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
@@ -175,7 +176,10 @@ def _append_map(story: list[Any], result: dict[str, Any]) -> None:
         image_width, image_height = reader.getSize()
         target_width = 170 * mm
         target_height = target_width * image_height / image_width
-        story.append(Image(reader, width=target_width, height=target_height))
+        # Pass a fresh file-like object to ReportLab's Platypus Image. The
+        # ImageReader is only used to inspect the dimensions; it is not itself
+        # a valid filename/file object for Platypus Image embedding.
+        story.append(Image(BytesIO(map_bytes), width=target_width, height=target_height))
         story.append(Spacer(1, 2 * mm))
         if result.get("module") == "deforestation":
             legend = "Forest year: " + " · ".join(
