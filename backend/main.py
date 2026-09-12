@@ -8,7 +8,7 @@ from urllib.request import Request, urlopen
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -76,12 +76,28 @@ def analyze(request: AnalysisRequest) -> dict:
             GEOTIFF_URLS[report_id] = geotiff_url
             result["geotiff_url"] = f"/api/geotiff/{report_id}"
 
+        # Download the static Earth Engine thumbnail once, then embed its
+        # bytes in the generated PDF. The interactive map is not changed.
+        map_image_url = result.get("map_image_url")
+        if map_image_url:
+            try:
+                image_request = Request(
+                    map_image_url,
+                    headers={"User-Agent": "GeoAI-Deforestation-WebGIS/1.0"},
+                )
+                with urlopen(image_request, timeout=120) as upstream:
+                    result["map_image_bytes"] = upstream.read()
+            except Exception:
+                result["map_image_bytes"] = None
+
         REPORTS[report_id] = build_report(result)
         if len(REPORTS) > 20:
             REPORTS.pop(next(iter(REPORTS)))
         if len(GEOTIFF_URLS) > 20:
             GEOTIFF_URLS.pop(next(iter(GEOTIFF_URLS)))
 
+        result.pop("map_image_bytes", None)
+        result.pop("map_image_url", None)
         result["report_url"] = f"/api/report/{report_id}"
         return result
     except (ValueError, RuntimeError) as exc:
