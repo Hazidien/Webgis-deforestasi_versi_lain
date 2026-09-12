@@ -4,10 +4,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 from uuid import uuid4
+from urllib.request import Request, urlopen
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -27,6 +28,7 @@ app.add_middleware(
 )
 
 REPORTS: dict[str, bytes] = {}
+GEOTIFF_URLS: dict[str, str] = {}
 
 
 class AnalysisRequest(BaseModel):
@@ -65,9 +67,21 @@ def analyze(request: AnalysisRequest) -> dict:
 
         result["generated_at"] = datetime.now(timezone.utc).isoformat()
         report_id = uuid4().hex
+
+        # Keep the Earth Engine download URL server-side and expose a local
+        # endpoint. This makes the browser download a real attachment instead
+        # of navigating to an expiring/cross-origin Earth Engine URL.
+        geotiff_url = result.get("geotiff_url")
+        if geotiff_url:
+            GEOTIFF_URLS[report_id] = geotiff_url
+            result["geotiff_url"] = f"/api/geotiff/{report_id}"
+
         REPORTS[report_id] = build_report(result)
         if len(REPORTS) > 20:
             REPORTS.pop(next(iter(REPORTS)))
+        if len(GEOTIFF_URLS) > 20:
+            GEOTIFF_URLS.pop(next(iter(GEOTIFF_URLS)))
+
         result["report_url"] = f"/api/report/{report_id}"
         return result
     except (ValueError, RuntimeError) as exc:
@@ -88,6 +102,27 @@ def report(report_id: str) -> Response:
         content=pdf,
         media_type="application/pdf",
         headers={"Content-Disposition": 'inline; filename="deforestation_report.pdf"'},
+    )
+
+
+@app.get("/api/geotiff/{report_id}")
+def geotiff(report_id: str) -> Response:
+    url = GEOTIFF_URLS.get(report_id)
+    if not url:
+        raise HTTPException(status_code=404, detail="GeoTIFF download expired or was not found.")
+
+    try:
+        request = Request(url, headers={"User-Agent": "GeoAI-Deforestation-WebGIS/1.0"})
+        with urlopen(request, timeout=120) as upstream:
+            data = upstream.read()
+            content_type = upstream.headers.get("Content-Type", "image/tiff")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Earth Engine GeoTIFF download failed: {exc}") from exc
+
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={"Content-Disposition": 'attachment; filename="geoai_deforestation.tif"'},
     )
 
 
