@@ -7,7 +7,8 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.lib.utils import ImageReader
+from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
 def build_report(result: dict[str, Any]) -> bytes:
@@ -57,6 +58,10 @@ def build_report(result: dict[str, Any]) -> bytes:
             )
         )
         story.extend([table, Spacer(1, 6 * mm)])
+
+        story.append(Paragraph("Analysis map", styles["Heading2"]))
+        _append_map(story, result)
+        story.append(Spacer(1, 4 * mm))
 
         story.append(Paragraph("Change classification", styles["Heading2"]))
         rows = [["Class", "Area (ha)"]]
@@ -119,6 +124,10 @@ def build_report(result: dict[str, Any]) -> bytes:
         )
         story.extend([table, Spacer(1, 6 * mm)])
 
+        story.append(Paragraph("Analysis map", styles["Heading2"]))
+        _append_map(story, result)
+        story.append(Spacer(1, 4 * mm))
+
         story.append(Paragraph("Forest area by benchmark year", styles["Heading2"]))
         area_rows = [["Year", "Forest area (ha)"]]
         for year in result.get("years", []):
@@ -154,6 +163,29 @@ def build_report(result: dict[str, Any]) -> bytes:
 
     doc.build(story)
     return buffer.getvalue()
+
+
+def _append_map(story: list[Any], result: dict[str, Any]) -> None:
+    map_bytes = result.get("map_image_bytes")
+    if not map_bytes:
+        story.append(Paragraph("Map image could not be generated for this run.", getSampleStyleSheet()["BodyText"]))
+        return
+    try:
+        reader = ImageReader(BytesIO(map_bytes))
+        image_width, image_height = reader.getSize()
+        target_width = 170 * mm
+        target_height = target_width * image_height / image_width
+        story.append(Image(reader, width=target_width, height=target_height))
+        story.append(Spacer(1, 2 * mm))
+        if result.get("module") == "deforestation":
+            legend = "Forest year: " + " · ".join(
+                f"{year} ({palette})" for year, palette in zip(result.get("years", []), result.get("forest_year", {}).get("palette", []))
+            )
+        else:
+            legend = "Change classification: green = no forest change · yellow = logging · red = deforestation · cyan = vegetation regrowth"
+        story.append(Paragraph(legend, getSampleStyleSheet()["BodyText"]))
+    except Exception:
+        story.append(Paragraph("Map image could not be embedded in the PDF.", getSampleStyleSheet()["BodyText"]))
 
 
 def _pct(value: Any) -> str:
