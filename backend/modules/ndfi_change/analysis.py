@@ -88,10 +88,11 @@ def build_period(roi: ee.Geometry, start: str, end: str) -> tuple[ee.Image, ee.I
         .filterDate(start, end)
         .filterBounds(roi)
     )
-    count = int(collection.size().getInfo())
-    if count == 0:
-        raise ValueError(f"No Landsat 8 scenes found for {start} to {end} in the selected AOI.")
 
+    # Do not call collection.size().getInfo() here.  It adds a synchronous
+    # server round-trip before the actual analysis and is not needed for the
+    # median composite.  Empty collections will fail at the first real
+    # reduction instead of delaying the complete request.
     image = collection.map(mask_l8sr).median()
     bands = ["SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B6", "SR_B7"]
     image = image.select(bands).clip(roi)
@@ -100,22 +101,28 @@ def build_period(roi: ee.Geometry, start: str, end: str) -> tuple[ee.Image, ee.I
     return image, sma.addBands(ndfi)
 
 
-def _class_area(classification: ee.Image, roi: ee.Geometry, value: int) -> float:
-    mask = classification.eq(value)
-    area = (
+def _class_areas(classification: ee.Image, roi: ee.Geometry) -> dict[int, float]:
+    """Calculate all four class areas in one grouped Earth Engine request."""
+    area_image = (
         ee.Image.pixelArea()
         .divide(10000)
-        .updateMask(mask)
-        .reduceRegion(
-            reducer=ee.Reducer.sum(),
-            geometry=roi,
-            scale=30,
-            bestEffort=True,
-            maxPixels=1e8,
-        )
-        .get("area")
+        .rename("area_ha")
+        .addBands(classification)
     )
-    return float(ee.Number(area or 0).getInfo())
+    grouped = area_image.reduceRegion(
+        reducer=ee.Reducer.sum().group(groupField=1, groupName="class"),
+        geometry=roi,
+        scale=30,
+        bestEffort=True,
+        maxPixels=1e8,
+    )
+    groups = grouped.get("groups").getInfo() or []
+    areas: dict[int, float] = {value: 0.0 for value in CLASS_LABELS}
+    for item in groups:
+        value = int(item.get("class"))
+        if value in areas:
+            areas[value] = float(item.get("sum", 0) or 0)
+    return areas
 
 
 def analyze_ndfi_change(request: dict[str, Any]) -> dict[str, Any]:
@@ -143,7 +150,7 @@ def analyze_ndfi_change(request: dict[str, Any]) -> dict[str, Any]:
     ndfi_pair = ndfi_t0.addBands(ndfi_t1).rename("NDFI_t0", "NDFI_t1")
     ndfi_change = ndfi_t1.subtract(ndfi_t0).rename("NDFI Change")
 
-    # Course 2 thresholds derived from the NDFI-difference histogram.
+    # Course 2 thresholds from the NDFI-difference histogram.
     classification = ndfi_change.expression(
         "(b(0) >= -0.095 && b(0) <= 0.095) ? 1 :"
         "(b(0) >= -0.250 && b(0) <= -0.095) ? 2 :"
@@ -151,23 +158,13 @@ def analyze_ndfi_change(request: dict[str, Any]) -> dict[str, Any]:
         "(b(0) >= 0.095) ? 4 : 0"
     ).updateMask(ndfi_t0.gt(0.60)).rename("change_class")
 
-    forest_t0 = ndfi_t0.gt(0.60).selfMask().rename("forest_t0")
-    forest_t0_area_ha = float(
-        forest_t0.multiply(ee.Image.pixelArea().divide(10000))
-        .reduceRegion(
-            reducer=ee.Reducer.sum(),
-            geometry=roi,
-            scale=30,
-            bestEffort=True,
-            maxPixels=1e8,
-        )
-        .get("forest_t0")
-        .getInfo()
-        or 0
-    )
+    # The classification is already masked by the Time 0 forest threshold.
+    # Therefore the sum of classes 1-4 is exactly the Time 0 forest area and
+    # the same grouped reduction can provide all class areas at once.
+    areas = _class_areas(classification, roi)
+    forest_t0_area_ha = float(sum(areas.values()))
 
     aoi_area_ha = float(roi.area(1).divide(10000).getInfo() or 0)
-    areas = {value: _class_area(classification, roi, value) for value in CLASS_LABELS}
 
     layer_specs = [
         (
@@ -217,7 +214,7 @@ def analyze_ndfi_change(request: dict[str, Any]) -> dict[str, Any]:
         ),
         (
             "Forest · Time 0",
-            forest_t0,
+            ndfi_t0.gt(0.60).selfMask().rename("forest_t0"),
             {"min": 0, "max": 1, "palette": ["228B22"]},
         ),
         (
@@ -228,11 +225,14 @@ def analyze_ndfi_change(request: dict[str, Any]) -> dict[str, Any]:
     ]
 
     layers: list[dict[str, str]] = []
+    classification_tile_url = None
     for label, image, vis in layer_specs:
         map_info = image.getMapId(vis)
-        layers.append({"label": label, "tile_url": map_info["tile_fetcher"].url_format})
+        tile_url = map_info["tile_fetcher"].url_format
+        layers.append({"label": label, "tile_url": tile_url})
+        if label == "Change Classification":
+            classification_tile_url = tile_url
 
-    primary_map = classification.getMapId({"min": 0, "max": 4, "palette": CLASS_PALETTE})
     geotiff_url = classification.getDownloadURL(
         {
             "scale": 30,
@@ -274,7 +274,7 @@ def analyze_ndfi_change(request: dict[str, Any]) -> dict[str, Any]:
         "composite": "One-year Landsat 8 median window centered on each selected observation date",
         "method": "Landsat 8 → cloud/saturation mask → median composite → SMA → GV/NPV/Soil/Cloud → Shade/GVs → NDFI → NDFI t1 - NDFI t0",
         "classification_map": {
-            "tile_url": primary_map["tile_fetcher"].url_format,
+            "tile_url": classification_tile_url,
             "palette": CLASS_PALETTE,
         },
         "layers": layers,
